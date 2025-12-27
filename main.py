@@ -1,32 +1,29 @@
 import os
-import requests
 from dotenv import load_dotenv
-from flask import Flask, request
+from telegram import Update
+from telegram.ext import ApplicationBuilder, MessageHandler, ContextTypes, filters
+import requests
 
 load_dotenv()
 
-DISCORD_WEBHOOK = os.getenv("DISCORD_WEBHOOK")
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+DISCORD_WEBHOOK = os.getenv("DISCORD_WEBHOOK")
 
-app = Flask(__name__)
+async def forward_to_discord(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.message and update.message.text:
+        text = update.message.text
+        username = update.message.from_user.username or update.message.from_user.first_name
 
-@app.route("/", methods=["POST"])
-def telegram_webhook():
-    data = request.json
+        payload = {
+            "content": f"📩 **Telegram Message**\n👤 {username}\n💬 {text}"
+        }
 
-    message = data.get("message", {})
-    text = message.get("text", "[non-text]")
-    user = message.get("from", {})
+        requests.post(DISCORD_WEBHOOK, json=payload)
 
-    payload = {
-        "content": f"📩 **New Telegram Message**\n"
-                   f"👤 Name: {user.get('first_name','')}\n"
-                   f"🆔 Username: @{user.get('username','no_username')}\n"
-                   f"💬 Message: {text}"
-    }
-
-    requests.post(DISCORD_WEBHOOK, json=payload)
-    return "ok"
+def main():
+    app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, forward_to_discord))
+    app.run_polling()
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=10000)
+    main()

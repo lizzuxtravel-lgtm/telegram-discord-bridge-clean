@@ -1,29 +1,32 @@
 import os
 import requests
-from telegram import Update
-from telegram.ext import ApplicationBuilder, MessageHandler, ContextTypes, filters
 from dotenv import load_dotenv
+from flask import Flask, request
 
 load_dotenv()
 
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 DISCORD_WEBHOOK = os.getenv("DISCORD_WEBHOOK")
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    text = update.message.text if update.message.text else "[Non-text message]"
+app = Flask(__name__)
+
+@app.route("/", methods=["POST"])
+def telegram_webhook():
+    data = request.json
+
+    message = data.get("message", {})
+    text = message.get("text", "[non-text]")
+    user = message.get("from", {})
 
     payload = {
         "content": f"📩 **New Telegram Message**\n"
-                   f"👤 Name: {user.full_name}\n"
-                   f"🆔 Username: @{user.username}\n"
+                   f"👤 Name: {user.get('first_name','')}\n"
+                   f"🆔 Username: @{user.get('username','no_username')}\n"
                    f"💬 Message: {text}"
     }
 
     requests.post(DISCORD_WEBHOOK, json=payload)
+    return "ok"
 
 if __name__ == "__main__":
-    app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
-    app.add_handler(MessageHandler(filters.ALL, handle_message))
-    print("Bot is running...")
-    app.run_polling()
+    app.run(host="0.0.0.0", port=10000)
